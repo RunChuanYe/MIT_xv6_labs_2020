@@ -1,3 +1,6 @@
+#ifndef USER_USER_H
+#define USER_USER_H
+
 struct stat;
 struct rtcdate;
 struct sysinfo;
@@ -42,3 +45,4 @@ void free(void*);
 int atoi(const char*);
 int memcmp(const void *, const void *, uint);
 void *memcpy(void *, const void *, uint);
+#endif

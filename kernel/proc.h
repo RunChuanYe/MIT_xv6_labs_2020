@@ -1,3 +1,6 @@
+#ifndef KERNEL_PROC_H
+#define KERNEL_PROC_H
+
 // Saved registers for kernel context switches.
 struct context {
   uint64 ra;
@@ -85,7 +88,8 @@ enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 // Per-process state
 struct proc {
   struct spinlock lock;
-
+  // using for the sys_trace
+  int traceMask;
   // p->lock must be held when using these:
   enum procstate state;        // Process state
   struct proc *parent;         // Parent process
@@ -104,3 +108,4 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 };
+#endif

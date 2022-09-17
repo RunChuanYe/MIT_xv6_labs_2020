@@ -6,7 +6,11 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 
+uint64 get_free_mem(struct proc*);
+uint64 get_free_proc();
+uint64 get_free_file();
 uint64
 sys_exit(void)
 {
@@ -94,4 +98,35 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+uint64 sys_trace(void) {
+    int mask;
+    if (argint(0, &mask) < 0) {
+        printf("trace: get mask error.\n");
+        return -1;
+    }
+    struct proc* p = myproc();
+    p->traceMask = mask;
+    return 0;
+}
+
+uint64 sys_sysinfo(void) {
+
+    struct proc * p = myproc();
+    uint64 si_addr;
+    struct sysinfo si;
+    if (argaddr(0, &si_addr) < 0) {
+      printf("sysinfo get argaddr error.\n");
+      return -1;
+    }
+
+    si.freemem = get_free_mem(p);
+    si.nproc = get_free_proc();
+    si.freefd = get_free_file();
+    if (copyout(p->pagetable, si_addr, (char*)&si, sizeof(si)) < 0) {
+      return -1;
+    }
+
+    return 0;
 }

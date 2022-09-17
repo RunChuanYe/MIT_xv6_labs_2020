@@ -1,3 +1,6 @@
+#ifndef KERNEL_SYSCALL_C
+#define KERNEL_SYSCALL_C
+
 #include "types.h"
 #include "param.h"
 #include "memlayout.h"
@@ -133,18 +136,48 @@ static uint64 (*syscalls[])(void) = {
 [SYS_sysinfo] sys_sysinfo,
 };
 
+static char* nameTable[] = {
+[SYS_fork]    "sys_fork",
+[SYS_exit]    "sys_exit",
+[SYS_wait]    "sys_wait",
+[SYS_pipe]    "sys_pipe",
+[SYS_read]    "sys_read",
+[SYS_kill]    "sys_kill",
+[SYS_exec]    "sys_exec",
+[SYS_fstat]   "sys_fstat",
+[SYS_chdir]   "sys_chdir",
+[SYS_dup]     "sys_dup",
+[SYS_getpid]  "sys_getpid",
+[SYS_sbrk]    "sys_sbrk",
+[SYS_sleep]   "sys_sleep",
+[SYS_uptime]  "sys_uptime",
+[SYS_open]    "sys_open",
+[SYS_write]   "sys_write",
+[SYS_mknod]   "sys_mknod",
+[SYS_unlink]  "sys_unlink",
+[SYS_link]    "sys_link",
+[SYS_mkdir]   "sys_mkdir",
+[SYS_close]   "sys_close",
+[SYS_trace]   "sys_trace",
+[SYS_sysinfo] "sys_sysinfo",
+};
+
 void
 syscall(void)
 {
   int num;
   struct proc *p = myproc();
-
+  int arg0;
   num = p->trapframe->a7;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
+    arg0 = p->trapframe->a0;
     p->trapframe->a0 = syscalls[num]();
+    if (p->traceMask & (1 << num))
+      printf("%d: %s(%d) -> %d\n", p->pid, nameTable[num], arg0, p->trapframe->a0);
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);
     p->trapframe->a0 = -1;
   }
 }
+#endif
