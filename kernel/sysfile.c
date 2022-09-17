@@ -484,3 +484,15 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64 get_free_file(){
+    int fd;
+    struct proc * p = myproc();
+    uint64 count = 0;
+    for (fd = 0; fd < NOFILE; ++fd) {
+      if (p->ofile[fd] == 0) {
+        count++;
+      }
+    }
+    return count;
+}
