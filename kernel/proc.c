@@ -11,10 +11,11 @@ struct cpu cpus[NCPU];
 struct proc proc[NPROC];
 
 struct proc *initproc;
-
+extern pagetable_t kernel_pagetable;
+pte_t *
+walk(pagetable_t pagetable, uint64 va, int alloc);
 int nextpid = 1;
 struct spinlock pid_lock;
-
 extern void forkret(void);
 static void wakeup1(struct proc *chan);
 static void freeproc(struct proc *p);
@@ -38,8 +39,11 @@ procinit(void)
       if(pa == 0)
         panic("kalloc");
       uint64 va = KSTACK((int) (p - proc));
+      // printf("pa: %p\n", pa);
+      // printf("va: %p\n", va);
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
       p->kstack = va;
+      // p->kstack = (uint64)pa;
   }
   kvminithart();
 }
@@ -113,6 +117,32 @@ found:
     return 0;
   }
 
+  // Allocate a kernel page.
+  if((p->kernel_pgtbl = (pagetable_t)kalloc()) == 0){
+    release(&p->lock);
+    return 0;
+  }
+  uint64 test = (uint64)kalloc();
+
+  mappages(p->kernel_pgtbl, 0, PGSIZE, test, PTE_R);
+  // get the kernel stack physical address.
+  // pte_t* ks_pte = (pte_t*)walk(kernel_pagetable, p->kstack, 0);
+  // if (ks_pte == 0) {
+  //   release(&p->lock);
+  //   return 0;
+  // }
+  // uint64 ks_pa = PTE2PA(*ks_pte);
+
+  // printf("ks_pa: %p\n", ks_pa);
+  // printf("va: %p\n", p->kstack);
+  // map the kernel stack.
+
+  // if (mappages(p->kernel_pgtbl, USER_KSTACK, PGSIZE, p->kstack, PTE_R | PTE_W) < 0) {
+  //   printf("error in map.\n");
+  // }
+  // p->kstack = USER_KSTACK;
+
+
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -120,7 +150,6 @@ found:
     release(&p->lock);
     return 0;
   }
-
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
