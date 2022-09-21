@@ -46,35 +46,21 @@ kvminit()
   // the highest virtual address in the kernel.
   kvmmap(TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
 }
+void my_kvmmap(pagetable_t pagetable, uint64 va, uint64 pa, uint64 sz, int perm);
 
-pagetable_t proc_kv_page() {
+pagetable_t proc_kernel_page_table() {
 
-  pagetable_t kernel_pagetable = (pagetable_t) kalloc();
-  memset(kernel_pagetable, 0, PGSIZE);
+  pagetable_t proc_kernel_pagetable = (pagetable_t) kalloc();
+  memset(proc_kernel_pagetable, 0, PGSIZE);
 
-  // uart registers
-  kvmmap(UART0, UART0, PGSIZE, PTE_R | PTE_W);
+  my_kvmmap(proc_kernel_pagetable, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+  my_kvmmap(proc_kernel_pagetable, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+  my_kvmmap(proc_kernel_pagetable, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+  my_kvmmap(proc_kernel_pagetable, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+  my_kvmmap(proc_kernel_pagetable, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+  my_kvmmap(proc_kernel_pagetable, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
 
-  // virtio mmio disk interface
-  kvmmap(VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
-
-  // CLINT
-  kvmmap(CLINT, CLINT, 0x10000, PTE_R | PTE_W);
-
-  // // PLIC
-  // kvmmap(PLIC, PLIC, 0x400000, PTE_R | PTE_W);
-
-  // map kernel text executable and read-only.
-  kvmmap(KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
-
-  // map kernel data and the physical RAM we'll make use of.
-  kvmmap((uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
-
-  // map the trampoline for trap entry/exit to
-  // the highest virtual address in the kernel.
-  kvmmap(TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
-
-  return kernel_pagetable;
+  return proc_kernel_pagetable;
 }
 
 
@@ -151,6 +137,11 @@ kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)
 {
   if(mappages(kernel_pagetable, va, sz, pa, perm) != 0)
     panic("kvmmap");
+}
+
+void my_kvmmap(pagetable_t pagetable, uint64 va, uint64 pa, uint64 sz, int perm) {
+  if(mappages(pagetable, va, sz, pa, perm) != 0)
+    panic("proc kernel vm map");
 }
 
 // translate a kernel virtual address to

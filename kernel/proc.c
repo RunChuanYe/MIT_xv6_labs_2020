@@ -11,10 +11,13 @@ struct cpu cpus[NCPU];
 struct proc proc[NPROC];
 
 struct proc *initproc;
+
 extern pagetable_t kernel_pagetable;
-pte_t *
-walk(pagetable_t pagetable, uint64 va, int alloc);
+pte_t *walk(pagetable_t pagetable, uint64 va, int alloc);
+pagetable_t proc_kernel_page_table();
+
 int nextpid = 1;
+
 struct spinlock pid_lock;
 extern void forkret(void);
 static void wakeup1(struct proc *chan);
@@ -38,12 +41,12 @@ procinit(void)
       char *pa = kalloc();
       if(pa == 0)
         panic("kalloc");
-      uint64 va = KSTACK((int) (p - proc));
+      p->kernel_pgtbl = (pagetable_t)KSTACK((int) (p - proc));
       // printf("pa: %p\n", pa);
       // printf("va: %p\n", va);
-      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      p->kstack = va;
-      // p->kstack = (uint64)pa;
+      // kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+      // p->kstack = va;
+      p->kstack = (uint64)pa;
   }
   kvminithart();
 }
@@ -118,13 +121,12 @@ found:
   }
 
   // Allocate a kernel page.
-  if((p->kernel_pgtbl = (pagetable_t)kalloc()) == 0){
+  // uint64 va_kernel_stack = (uint64)p->kernel_pgtbl;
+  if((p->kernel_pgtbl = proc_kernel_page_table()) == 0){
     release(&p->lock);
     return 0;
   }
-  uint64 test = (uint64)kalloc();
 
-  mappages(p->kernel_pgtbl, 0, PGSIZE, test, PTE_R);
   // get the kernel stack physical address.
   // pte_t* ks_pte = (pte_t*)walk(kernel_pagetable, p->kstack, 0);
   // if (ks_pte == 0) {
@@ -137,10 +139,10 @@ found:
   // printf("va: %p\n", p->kstack);
   // map the kernel stack.
 
-  // if (mappages(p->kernel_pgtbl, USER_KSTACK, PGSIZE, p->kstack, PTE_R | PTE_W) < 0) {
-  //   printf("error in map.\n");
-  // }
-  // p->kstack = USER_KSTACK;
+  if (mappages(p->kernel_pgtbl, USER_KSTACK, PGSIZE, p->kstack, PTE_R | PTE_W) < 0) {
+    printf("error in map.\n");
+  }
+  p->kstack = USER_KSTACK;
 
 
   // An empty user page table.
@@ -503,6 +505,9 @@ scheduler(void)
         p->state = RUNNING;
         c->proc = p;
         swtch(&c->context, &p->context);
+        // w_satp(MAKE_SATP(p->kernel_pgtbl));
+        // w_satp(MAKE_SATP(kernel_pagetable));
+        // sfence_vma();
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
