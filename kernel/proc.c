@@ -44,7 +44,6 @@ procinit(void)
       uint64 va = (uint64)KSTACK((int) (p - proc));
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
       p->kstack = va;
-      p->kernel_pgtbl = (pagetable_t)pa;
   }
   kvminithart();
 }
@@ -119,7 +118,6 @@ found:
   }
 
   // Allocate a kernel page.
-  uint64 pa_kernel_stack = (uint64)p->kernel_pgtbl;
   if((p->kernel_pgtbl = proc_kernel_page_table()) == 0){
     release(&p->lock);
     return 0;
