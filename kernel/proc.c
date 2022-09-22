@@ -123,7 +123,15 @@ found:
     return 0;
   }
 
-  if (mappages(p->kernel_pgtbl, p->kstack, PGSIZE, pa_kernel_stack, PTE_R | PTE_W) < 0) {
+  // get the kernel stack physical address.
+  pte_t* ks_pte = (pte_t*)walk(kernel_pagetable, p->kstack, 0);
+  if (ks_pte == 0) {
+    release(&p->lock);
+    return 0;
+  }
+  uint64 ks_pa = PTE2PA(*ks_pte);
+
+  if (mappages(p->kernel_pgtbl, p->kstack, PGSIZE, ks_pa, PTE_R | PTE_W) < 0) {
     printf("error in map.\n");
   }
 
@@ -142,7 +150,7 @@ found:
 
   return p;
 }
-
+void my_freewalk(pagetable_t pagetable);
 // free a proc structure and the data hanging from it,
 // including user pages.
 // p->lock must be held.
@@ -154,6 +162,9 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  if(p->kernel_pgtbl) 
+    my_freewalk(p->kernel_pgtbl);
+  p->kernel_pgtbl = 0;
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
