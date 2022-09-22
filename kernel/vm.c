@@ -77,11 +77,9 @@ void copy_userpg_to_kernelpg(pagetable_t user, pagetable_t kernel) {
       for (int j = 0; j < 512; ++j) {
         kernelChild[j] = userChild[j] & (~PTE_U);
       }
-    } else {
-      if (kernel[i] & PTE_V) {
-        kfree((void *)PTE2PA(kernel[i]));
-        kernel[i] = 0;
-      }  
+    } else if (kernel[i] & PTE_V){
+      pagetable_t kernelChild = (pagetable_t)PTE2PA(kernel[i]);
+      for (int j = 0; j < 512; ++j) kernelChild[j] = 0;
     }
   }
 }
