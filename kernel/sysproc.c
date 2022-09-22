@@ -38,17 +38,27 @@ sys_wait(void)
   return wait(p);
 }
 
+void copy_userpg_to_kernelpg(pagetable_t user, pagetable_t kernel);
+
 uint64
 sys_sbrk(void)
 {
-  int addr;
   int n;
 
   if(argint(0, &n) < 0)
     return -1;
-  addr = myproc()->sz;
+
+  struct proc * p = myproc();
+  uint64 addr = p->sz;
+
   if(growproc(n) < 0)
     return -1;
+
+  // copy userpg to kernelpg
+  uint64 userpg = PTE2PA(p->pagetable[0]);
+  uint64 kernelpg = PTE2PA(p->kernel_pgtbl[0]);
+  copy_userpg_to_kernelpg((pagetable_t)userpg, (pagetable_t)kernelpg);
+
   return addr;
 }
 

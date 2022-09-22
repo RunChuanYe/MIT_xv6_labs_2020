@@ -13,8 +13,12 @@ struct proc proc[NPROC];
 struct proc *initproc;
 
 extern pagetable_t kernel_pagetable;
+
 pte_t *walk(pagetable_t pagetable, uint64 va, int alloc);
+
 pagetable_t proc_kernel_page_table();
+
+void copy_userpg_to_kernelpg(pagetable_t user, pagetable_t kernel);
 
 int nextpid = 1;
 
@@ -254,6 +258,11 @@ userinit(void)
 
   p->state = RUNNABLE;
 
+  // copy userpg to kernelpg
+  uint64 userpg = PTE2PA(p->pagetable[0]);
+  uint64 kernelpg = PTE2PA(p->kernel_pgtbl[0]);
+  copy_userpg_to_kernelpg((pagetable_t)userpg, (pagetable_t)kernelpg);
+
   release(&p->lock);
 }
 
@@ -319,6 +328,11 @@ fork(void)
 
   np->state = RUNNABLE;
 
+  // copy userpg to kernlepg
+  uint64 userpg = PTE2PA(np->pagetable[0]);
+  uint64 kernelpg = PTE2PA(np->kernel_pgtbl[0]);
+  copy_userpg_to_kernelpg((pagetable_t)userpg, (pagetable_t)kernelpg);
+ 
   release(&np->lock);
 
   return pid;
@@ -689,7 +703,7 @@ either_copyin(void *dst, int user_src, uint64 src, uint64 len)
 {
   struct proc *p = myproc();
   if(user_src){
-    return copyin(p->pagetable, dst, src, len);
+    return copyin_new(p->pagetable, dst, src, len);
   } else {
     memmove(dst, (char*)src, len);
     return 0;

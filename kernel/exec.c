@@ -9,6 +9,8 @@
 
 static int loadseg(pde_t *pgdir, uint64 addr, struct inode *ip, uint offset, uint sz);
 
+void copy_userpg_to_kernelpg(pagetable_t user, pagetable_t kernel);
+
 int
 exec(char *path, char **argv)
 {
@@ -115,6 +117,11 @@ exec(char *path, char **argv)
   p->trapframe->epc = elf.entry;  // initial program counter = main
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
+
+  // copy userpg to kernelpg
+  uint64 userpg = PTE2PA(p->pagetable[0]);
+  uint64 kernelpg = PTE2PA(p->kernel_pgtbl[0]);
+  copy_userpg_to_kernelpg((pagetable_t)userpg, (pagetable_t)kernelpg);
 
   if (p->pid == 1) {
     printf("page table %p\n", p->pagetable);

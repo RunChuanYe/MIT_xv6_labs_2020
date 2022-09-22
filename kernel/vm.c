@@ -64,7 +64,27 @@ pagetable_t proc_kernel_page_table() {
   return proc_kernel_pagetable;
 }
 
-
+void copy_userpg_to_kernelpg(pagetable_t user, pagetable_t kernel) {
+  for (int i = 0; i < 96; ++i) {
+    if (user[i] & PTE_V) {
+      if ((kernel[i] & PTE_V) == 0) {
+        kernel[i] = (uint64) kalloc();
+        memset((pagetable_t)kernel[i], 0, PGSIZE);
+        kernel[i] = PA2PTE(kernel[i]) | PTE_V;
+      }
+      pagetable_t userChild = (pagetable_t)PTE2PA(user[i]);
+      pagetable_t kernelChild = (pagetable_t)PTE2PA(kernel[i]);
+      for (int j = 0; j < 512; ++j) {
+        kernelChild[j] = userChild[j] & (~PTE_U);
+      }
+    } else {
+      if (kernel[i] & PTE_V) {
+        kfree((void *)PTE2PA(kernel[i]));
+        kernel[i] = 0;
+      }  
+    }
+  }
+}
 
 // Switch h/w page table register to the kernel's page table,
 // and enable paging.
