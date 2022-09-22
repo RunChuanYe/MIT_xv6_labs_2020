@@ -41,12 +41,10 @@ procinit(void)
       char *pa = kalloc();
       if(pa == 0)
         panic("kalloc");
-      p->kernel_pgtbl = (pagetable_t)KSTACK((int) (p - proc));
-      // printf("pa: %p\n", pa);
-      // printf("va: %p\n", va);
-      // kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      // p->kstack = va;
-      p->kstack = (uint64)pa;
+      uint64 va = (uint64)KSTACK((int) (p - proc));
+      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+      p->kstack = va;
+      p->kernel_pgtbl = (pagetable_t)pa;
   }
   kvminithart();
 }
@@ -121,29 +119,15 @@ found:
   }
 
   // Allocate a kernel page.
-  // uint64 va_kernel_stack = (uint64)p->kernel_pgtbl;
+  uint64 pa_kernel_stack = (uint64)p->kernel_pgtbl;
   if((p->kernel_pgtbl = proc_kernel_page_table()) == 0){
     release(&p->lock);
     return 0;
   }
 
-  // get the kernel stack physical address.
-  // pte_t* ks_pte = (pte_t*)walk(kernel_pagetable, p->kstack, 0);
-  // if (ks_pte == 0) {
-  //   release(&p->lock);
-  //   return 0;
-  // }
-  // uint64 ks_pa = PTE2PA(*ks_pte);
-
-  // printf("ks_pa: %p\n", ks_pa);
-  // printf("va: %p\n", p->kstack);
-  // map the kernel stack.
-
-  if (mappages(p->kernel_pgtbl, USER_KSTACK, PGSIZE, p->kstack, PTE_R | PTE_W) < 0) {
+  if (mappages(p->kernel_pgtbl, p->kstack, PGSIZE, pa_kernel_stack, PTE_R | PTE_W) < 0) {
     printf("error in map.\n");
   }
-  p->kstack = USER_KSTACK;
-
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
@@ -504,11 +488,11 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        
+        w_satp(MAKE_SATP(p->kernel_pgtbl));
+        sfence_vma();
         swtch(&c->context, &p->context);
-        // w_satp(MAKE_SATP(p->kernel_pgtbl));
-        // w_satp(MAKE_SATP(kernel_pagetable));
-        // sfence_vma();
-
+        kvminithart();
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0; // cpu dosen't run any process now
