@@ -25,6 +25,14 @@
 
 #define NBUCKETS 13
 
+#define INIT_NEW_CACHE_BLOCK(b, dev, blockno) \
+  do {\
+      b->dev = dev;\
+      b->blockno = blockno;\
+      b->valid = 0;\
+      b->refcnt = 1;\
+  } while(0)
+
 struct {
   struct spinlock lock[NBUCKETS];
   struct buf buf[NBUF];
@@ -57,70 +65,73 @@ binit(void)
   }
 }
 
+// must hold the bucket lock
+struct buf* get_cached(struct buf* b, uint bucket_index, uint dev, uint blockno) {
+  // Is the block already cached?
+  for(b = bcache.hashbuckets[bucket_index].next; b != &bcache.hashbuckets[bucket_index]; b = b->next){
+    if(b->dev == dev && b->blockno == blockno){
+      b->refcnt++;
+      return b;
+    }
+  }
+  return 0;
+}
+
 // Look through buffer cache for block on device dev.
 // If not found, allocate a buffer.
 // In either case, return locked buffer.
 static struct buf*
 bget(uint dev, uint blockno)
 {
-  struct buf *b, *try2;
+  struct buf *b = 0, *try2 = 0;
 
   int bucket_index = blockno % NBUCKETS;
 
   acquire(&bcache.lock[bucket_index]);
+  
+  b = get_cached(b, bucket_index, dev, blockno);
 
-  // Is the block already cached?
-  for(b = bcache.hashbuckets[bucket_index].next; b != &bcache.hashbuckets[bucket_index]; b = b->next){
-    if(b->dev == dev && b->blockno == blockno){
-      b->refcnt++;
-      release(&bcache.lock[bucket_index]);
-      acquiresleep(&b->lock);
-      return b;
-    }
+  if (b) {
+    release(&bcache.lock[bucket_index]);
+    acquiresleep(&b->lock);
+    return b;
   }
 
   // Not cached.
   // Recycle the least recently used (LRU) unused buffer.
   for(b = bcache.hashbuckets[bucket_index].prev; b != &bcache.hashbuckets[bucket_index]; b = b->prev){
     if(b->refcnt == 0) {
-      b->dev = dev;
-      b->blockno = blockno;
-      b->valid = 0;
-      b->refcnt = 1;
+      INIT_NEW_CACHE_BLOCK(b, dev, blockno);
       release(&bcache.lock[bucket_index]);
       acquiresleep(&b->lock);
       return b;
     }
   }
-
   release(&bcache.lock[bucket_index]);
 
+  // get free buf from other buckets
   for (int i = 0; i < NBUCKETS; ++i) {
     if (i == bucket_index) continue;
-    else {
-      acquire(&bcache.lock[i]);
-      for(b = bcache.hashbuckets[i].prev; b != &bcache.hashbuckets[i]; b = b->prev){
-        if(b->refcnt == 0) {
-          b->prev->next = b->next;
-          b->next->prev = b->prev;
-          release(&bcache.lock[i]);
-          acquire(&bcache.lock[bucket_index]);
-          for(try2 = bcache.hashbuckets[bucket_index].next; try2 != &bcache.hashbuckets[bucket_index]; try2 = try2->next){
-            if(try2->dev == dev && try2->blockno == blockno){
-              try2->refcnt++;
-              b->next = &bcache.hashbuckets[bucket_index];
-              b->prev = bcache.hashbuckets[bucket_index].prev;
-              bcache.hashbuckets[bucket_index].prev->next = b;
-              bcache.hashbuckets[bucket_index].prev = b;
-              release(&bcache.lock[bucket_index]);
-              acquiresleep(&try2->lock);
-              return try2;
-            }
-          }
-          b->dev = dev;
-          b->blockno = blockno;
-          b->valid = 0;
-          b->refcnt = 1;
+    
+    acquire(&bcache.lock[i]);
+    for(b = bcache.hashbuckets[i].prev; b != &bcache.hashbuckets[i]; b = b->prev){
+      if(b->refcnt == 0) {
+        b->prev->next = b->next;
+        b->next->prev = b->prev;
+        release(&bcache.lock[i]);
+        acquire(&bcache.lock[bucket_index]);
+
+        try2 = get_cached(try2, bucket_index, dev, blockno);
+        if (try2) {
+          b->next = &bcache.hashbuckets[bucket_index];
+          b->prev = bcache.hashbuckets[bucket_index].prev;
+          bcache.hashbuckets[bucket_index].prev->next = b;
+          bcache.hashbuckets[bucket_index].prev = b;
+          release(&bcache.lock[bucket_index]);
+          acquiresleep(&try2->lock);
+          return try2;
+        } else {
+          INIT_NEW_CACHE_BLOCK(b, dev, blockno);
           b->prev = &bcache.hashbuckets[bucket_index];
           b->next = bcache.hashbuckets[bucket_index].next;
           bcache.hashbuckets[bucket_index].next->prev = b;
@@ -130,8 +141,8 @@ bget(uint dev, uint blockno)
           return b;
         }
       }
-      release(&bcache.lock[i]);
     }
+    release(&bcache.lock[i]);
   }
 
   panic("bget: no buffers");
