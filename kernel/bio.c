@@ -23,6 +23,8 @@
 #include "fs.h"
 #include "buf.h"
 
+#define NBUCKETS 13
+
 struct {
   struct spinlock lock;
   struct buf buf[NBUF];
@@ -31,6 +33,9 @@ struct {
   // Sorted by how recently the buffer was used.
   // head.next is most recent, head.prev is least.
   struct buf head;
+
+  struct buf hashbuckets[NBUCKETS];
+
 } bcache;
 
 void
