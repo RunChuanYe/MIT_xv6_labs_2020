@@ -28,7 +28,6 @@
 struct {
   struct spinlock lock[NBUCKETS];
   struct buf buf[NBUF];
-  struct spinlock glock;
   // Linked list of all buffers, through prev/next.
   // Sorted by how recently the buffer was used.
   // head.next is most recent, head.prev is least.
@@ -40,7 +39,6 @@ binit(void)
 {
   struct buf *b;
   int count = 0;
-  initlock(&(bcache.glock), "bcache_glock");
 
   for (int i = 0; i < NBUCKETS; ++i) {
     // Create linked list of buffers 
@@ -65,7 +63,7 @@ binit(void)
 static struct buf*
 bget(uint dev, uint blockno)
 {
-  struct buf *b;
+  struct buf *b, *try2;
 
   int bucket_index = blockno % NBUCKETS;
 
@@ -103,14 +101,26 @@ bget(uint dev, uint blockno)
       acquire(&bcache.lock[i]);
       for(b = bcache.hashbuckets[i].prev; b != &bcache.hashbuckets[i]; b = b->prev){
         if(b->refcnt == 0) {
-          b->dev = dev;
-          b->blockno = blockno;
-          b->valid = 0;
-          b->refcnt = 1;
           b->prev->next = b->next;
           b->next->prev = b->prev;
           release(&bcache.lock[i]);
           acquire(&bcache.lock[bucket_index]);
+          for(try2 = bcache.hashbuckets[bucket_index].next; try2 != &bcache.hashbuckets[bucket_index]; try2 = try2->next){
+            if(try2->dev == dev && try2->blockno == blockno){
+              try2->refcnt++;
+              b->next = &bcache.hashbuckets[bucket_index];
+              b->prev = bcache.hashbuckets[bucket_index].prev;
+              bcache.hashbuckets[bucket_index].prev->next = b;
+              bcache.hashbuckets[bucket_index].prev = b;
+              release(&bcache.lock[bucket_index]);
+              acquiresleep(&try2->lock);
+              return try2;
+            }
+          }
+          b->dev = dev;
+          b->blockno = blockno;
+          b->valid = 0;
+          b->refcnt = 1;
           b->prev = &bcache.hashbuckets[bucket_index];
           b->next = bcache.hashbuckets[bucket_index].next;
           bcache.hashbuckets[bucket_index].next->prev = b;
