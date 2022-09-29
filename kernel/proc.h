@@ -94,7 +94,7 @@ struct proc {
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
 
-  void (*handler)();           // alarm handler func
+  uint64 handler;              // alarm handler func
   int is_alarm;                // is alarm?
   int tick_time;               // the tick time need to call handler
   int tick_left;               // left tick time

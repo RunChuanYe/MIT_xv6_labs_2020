@@ -110,7 +110,7 @@ found:
   p->tick_time = 0; 
   p->tick_left = 0; 
   p->is_alarm = 0;  // false
-  p->handler = (void*) -1;  // not null
+  p->handler = 0;   // not null
 
 
   p->pid = allocpid();

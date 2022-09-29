@@ -119,7 +119,7 @@ uint64 sys_sigalarm() {
     myproc()->is_alarm = 1;
     myproc()->tick_time = tick;
     myproc()->tick_left = tick;
-    myproc()->handler = (void*)p;
+    myproc()->handler = p;
   }
 
   return 0;
