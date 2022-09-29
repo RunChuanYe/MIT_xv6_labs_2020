@@ -13,5 +13,11 @@ int f(int x) {
 
 void main(void) {
   printf("%d %d\n", f(8)+1, 13);
+
+  // add the test code57616
+  unsigned int i = 0x00646c72;
+  printf("H%x wo%s", 57616, &i);
+  // end add
+  
   exit(0);
 }
