@@ -99,8 +99,11 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+void moveContent(struct trapframe* dst, struct trapframe *src);
 
 uint64 sys_sigreturn() {
+  myproc()->in_alarm = 0;
+  moveContent(myproc()->trapframe, &myproc()->alarmContext);
   return 0;
 }
 
@@ -121,6 +124,5 @@ uint64 sys_sigalarm() {
     myproc()->tick_left = tick;
     myproc()->handler = p;
   }
-
   return 0;
 }

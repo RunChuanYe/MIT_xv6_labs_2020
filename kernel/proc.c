@@ -109,6 +109,7 @@ found:
   // init for the alarm!
   p->tick_time = 0; 
   p->tick_left = 0; 
+  p->in_alarm = 0;
   p->is_alarm = 0;  // false
   p->handler = 0;   // not null
 

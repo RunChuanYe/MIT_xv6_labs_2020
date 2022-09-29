@@ -96,9 +96,11 @@ struct proc {
 
   uint64 handler;              // alarm handler func
   int is_alarm;                // is alarm?
+  int in_alarm;                // is in alarm?
   int tick_time;               // the tick time need to call handler
   int tick_left;               // left tick time
-
+  struct trapframe alarmContext;
+  
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)
