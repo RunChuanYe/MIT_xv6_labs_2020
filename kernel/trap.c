@@ -74,7 +74,7 @@ usertrap(void)
       // get the vitrual adress
       uint64 va = r_stval();
       va = PGROUNDDOWN(va);
-      if (va > p->sz) {
+      if (va > p->sz || va < p->trapframe->sp) {
         p->killed = 1;
         exit(-1);
       }

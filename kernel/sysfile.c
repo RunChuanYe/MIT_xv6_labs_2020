@@ -66,6 +66,29 @@ sys_dup(void)
   return fd;
 }
 
+void check_va_exit(uint64 va, uint64 sz) {
+
+  uint64 pa = 0;
+  uint64 pgsz = myproc()->sz; // else freewalk: leaf
+  for (uint64 v = va; v < va+sz && v < pgsz; ) {
+    if ((pa = walkaddr(myproc()->pagetable, v)) == 0) {
+        // not mapped
+        // valid range, p is the return value of sbrk
+        // p->sz is correctly seted
+        char *mem = 0;
+        if ((mem = kalloc()) == 0) {
+          myproc()->killed = 1;
+        }
+        memset(mem, 0, PGSIZE);
+        if (mappages(myproc()->pagetable, v, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_X|PTE_U) != 0) {
+          kfree(mem);
+        }
+    }
+    v += PGSIZE;
+  }
+}
+
+
 uint64
 sys_read(void)
 {
@@ -75,6 +98,7 @@ sys_read(void)
 
   if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argaddr(1, &p) < 0)
     return -1;
+  check_va_exit(p, n);
   return fileread(f, p, n);
 }
 
@@ -87,7 +111,7 @@ sys_write(void)
 
   if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argaddr(1, &p) < 0)
     return -1;
-
+  check_va_exit(p, n);
   return filewrite(f, p, n);
 }
 
@@ -464,6 +488,9 @@ sys_pipe(void)
 
   if(argaddr(0, &fdarray) < 0)
     return -1;
+
+  check_va_exit(PGROUNDDOWN(fdarray), p->sz);
+  
   if(pipealloc(&rf, &wf) < 0)
     return -1;
   fd0 = -1;
