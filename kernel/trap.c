@@ -68,6 +68,32 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
+
+    // handler the user trap
+    if (r_scause() == 13 || r_scause() == 15) {
+      // get the vitrual adress
+      uint64 va = r_stval();
+      va = PGROUNDDOWN(va);
+      if (va > p->sz) {
+        p->killed = 1;
+        exit(-1);
+      }
+      char *mem = 0;
+      if ((mem = kalloc()) == 0) {
+        // printf("trap.c: kalloc error\n");
+        p->killed = 1;
+        exit(-1);
+      }
+      memset(mem, 0, PGSIZE);
+      if (mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_X|PTE_U) != 0) {
+        // printf("trap.c: map the mem error\n");
+        kfree(mem);
+      }
+      // printf("a page fault\n");
+      usertrapret();
+    }
+
+
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
