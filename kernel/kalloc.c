@@ -82,7 +82,7 @@ kalloc(void)
   return (void*)r;
 }
 
-uint64 get_free_mem(struct proc* p){
+uint64 get_free_mem(){
 
   uint64 fm = 0;
   struct run *r;

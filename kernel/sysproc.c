@@ -8,7 +8,7 @@
 #include "proc.h"
 #include "sysinfo.h"
 
-uint64 get_free_mem(struct proc*);
+uint64 get_free_mem();
 uint64 get_free_proc();
 uint64 get_free_file();
 uint64
@@ -121,7 +121,7 @@ uint64 sys_sysinfo(void) {
       return -1;
     }
 
-    si.freemem = get_free_mem(p);
+    si.freemem = get_free_mem();
     si.nproc = get_free_proc();
     si.freefd = get_free_file();
     if (copyout(p->pagetable, si_addr, (char*)&si, sizeof(si)) < 0) {
