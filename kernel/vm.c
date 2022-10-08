@@ -5,7 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
-
+#include "spinlock.h"
+#include "proc.h"
 /*
  * the kernel's page table.
  */
@@ -17,6 +18,8 @@ extern char trampoline[]; // trampoline.S
 
 uint64 get_ref_count(uint64 pa);
 void change_ref_count(uint64 pa, int add);
+void get_lock();
+void release_lock();
 
 /*
  * create a direct-map page table for the kernel.
@@ -323,7 +326,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     
     // cow
-    *pte = *pte & ~PTE_W;
+    *pte = (*pte & ~PTE_W) | PTE_COW;
     
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
@@ -335,7 +338,9 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       // kfree(mem);
       goto err;
     }
+    get_lock();
     change_ref_count(pa, 1);
+    release_lock();
   }
   return 0;
 
@@ -375,19 +380,24 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     
     if (pte == 0 || ((*pte & (PTE_V | PTE_U)) == 0)) return -1;
     
-    if (!(*pte & PTE_W)) {
+    if ((*pte & PTE_COW) && va0 < myproc()->sz) {
       pa = PTE2PA(*pte);
-      if (get_ref_count(pa) == 1)
+      get_lock();
+      if (get_ref_count(pa) == 1) {
         *pte |= PTE_W;
-      else {
+        *pte &= ~PTE_COW;
+      } else {
         char *mem = 0;
         if ((mem = kalloc()) == 0) {
+          release_lock();
           return -1;
         }
         memmove(mem, (char*)pa, PGSIZE);
-        *pte = PA2PTE((uint64)mem) | PTE_FLAGS(*pte) | PTE_W;
+        *pte = (PA2PTE((uint64)mem) | PTE_FLAGS(*pte) | PTE_W) & ~PTE_COW;
+        
         change_ref_count(pa, 0);
       }
+      release_lock();
     }
 
     pa0 = walkaddr(pagetable, va0);

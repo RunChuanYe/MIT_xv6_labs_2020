@@ -12,6 +12,8 @@ uint ticks;
 extern char trampoline[], uservec[], userret[];
 uint64 get_ref_count(uint64 pa);
 void change_ref_count(uint64 pa, int add);
+void get_lock();
+void release_lock();
 
 // in kernelvec.S, calls kerneltrap().
 void kernelvec();
@@ -33,7 +35,6 @@ trapinithart(void)
 
 pte_t *
 walk(pagetable_t pagetable, uint64 va, int alloc);
-void change_ref_count(uint64 pa, int add);
 
 //
 // handle an interrupt, exception, or system call from user space.
@@ -77,24 +78,39 @@ usertrap(void)
   } else if (r_scause() == 13 || r_scause() == 15) {
     // cow
     uint64 va = r_stval();
+    uint64 va0 = PGROUNDDOWN(va);
+    if (va0 > p->sz) {
+      p->killed = 1;
+      exit(-1);
+    }
     uint64 old_pa = walkaddr(p->pagetable, va);
-    if (old_pa == 0) panic("old_pa is null");
+    if (old_pa == 0) {
+      p->killed = 1;
+      exit(-1);
+    }
     pte_t* pte = walk(p->pagetable, va, 0);
+    if (!(*pte & PTE_COW)) {
+      p->killed = 1;
+      exit(-1);
+    }
+    get_lock();
     uint64 ref_count = get_ref_count(old_pa);
-    
     if (ref_count == 1) {
       *pte |= PTE_W;
+      *pte &= ~PTE_COW;
     } else {
       char *mem = 0;
       if ((mem = kalloc()) == 0) {
         p->killed = 1;
+        release_lock();
         exit(-1);
       }
       memmove(mem, (char*)old_pa, PGSIZE);
-      *pte = PA2PTE((uint64)mem) | PTE_FLAGS(*pte) | PTE_W;
+      *pte = (PA2PTE((uint64)mem) | PTE_FLAGS(*pte) | PTE_W) & ~PTE_COW;
       change_ref_count(old_pa, 0);
     }
-
+    release_lock();
+    usertrapret();
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

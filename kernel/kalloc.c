@@ -24,7 +24,8 @@ struct spinlock refer_count_lock;
 void set_value(uint64 pa, uint64 set_one);
 uint64 get_ref_count(uint64 pa);
 void change_ref_count(uint64 pa, int add);
-
+void get_lock();
+void release_lock();
 
 struct run {
   struct run *next;
@@ -79,6 +80,7 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
+  get_lock();
   if (get_ref_count((uint64)pa) == 0)
     my_free((uint64)pa);
   else {
@@ -86,7 +88,7 @@ kfree(void *pa)
     if (get_ref_count((uint64)pa) == 0)
       my_free((uint64)pa);
   } 
-
+  release_lock();
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -105,7 +107,9 @@ kalloc(void)
 
   if(r) {
     memset((char*)r, 5, PGSIZE); // fill with junk
+    get_lock();
     set_value((uint64)r, 1);
+    release_lock();
   }
   return (void*)r;
 }
@@ -114,20 +118,16 @@ kalloc(void)
 // add : 1 ++
 void change_ref_count(uint64 pa, int add) {
   if (VALID_RANGE(pa) && refer_count[INDEX(pa)] > 0) {
-    acquire(&refer_count_lock);
     if (add) 
       refer_count[INDEX(pa)]++;
     else 
       refer_count[INDEX(pa)]--;
-    release(&refer_count_lock);
   }
 }
 
 uint64 get_ref_count(uint64 pa) {
   if (VALID_RANGE(pa)) {
-    acquire(&refer_count_lock);
     uint64 ref = refer_count[INDEX(pa)];
-    release(&refer_count_lock);
     return ref;
   } else {
     return -1;
@@ -136,11 +136,19 @@ uint64 get_ref_count(uint64 pa) {
 
 void set_value(uint64 pa, uint64 set_one) {
   if (VALID_RANGE(pa)) {
-    acquire(&refer_count_lock);
     if (set_one)
       refer_count[INDEX(pa)] = 1;
     else 
       refer_count[INDEX(pa)] = 0;
-    release(&refer_count_lock);
   }
+}
+
+void get_lock(){
+  if (!holding(&refer_count_lock))
+    acquire(&refer_count_lock);
+}
+
+void release_lock(){
+  if (holding(&refer_count_lock))
+    release(&refer_count_lock);
 }
