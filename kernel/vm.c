@@ -15,6 +15,9 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
+uint64 get_ref_count(uint64 pa);
+void change_ref_count(uint64 pa, int add);
+
 /*
  * create a direct-map page table for the kernel.
  */
@@ -173,7 +176,7 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 void
 uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
-  uint64 a;
+  uint64 a, pa = 0;
   pte_t *pte;
 
   if((va % PGSIZE) != 0)
@@ -186,10 +189,15 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: not mapped");
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
+    pa = PTE2PA(*pte);
     if(do_free){
-      uint64 pa = PTE2PA(*pte);
-      kfree((void*)pa);
+      if (pa > PHYSTOP || pa < KERNBASE) {
+        kfree((void*)pa);
+      } else if (get_ref_count(pa) == 1) {
+        kfree((void*)pa);
+      }
     }
+    change_ref_count(pa, 0);
     *pte = 0;
   }
 }
@@ -324,7 +332,8 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    
+    change_ref_count(pa, 1);
+
     // if((mem = kalloc()) == 0)
     //   goto err;
     // memmove(mem, (char*)pa, PGSIZE);
@@ -360,9 +369,16 @@ int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
-
+  pte_t* pte;
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+    // cow
+    pte = walk(pagetable, va0, 0);
+ 
+    if (!(*pte & PTE_W)) {
+      panic("copyout: handle the cow first");
+    }
+
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;

@@ -13,6 +13,8 @@ void freerange(void *pa_start, void *pa_end);
 
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
+  
+uint64 refer_count[(PHYSTOP - KERNBASE) / PGSIZE];
 
 struct run {
   struct run *next;
@@ -54,6 +56,7 @@ kfree(void *pa)
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
+  refer_count[((uint64)pa - KERNBASE) / PGSIZE] = 0;
   r = (struct run*)pa;
 
   acquire(&kmem.lock);
@@ -76,7 +79,31 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-  if(r)
+  if(r) {
     memset((char*)r, 5, PGSIZE); // fill with junk
+    refer_count[((uint64)r - KERNBASE) / PGSIZE] = 1;
+  }
   return (void*)r;
+}
+
+// add : 0 --
+// add : 1 ++
+void change_ref_count(uint64 pa, int add) {
+  if (pa <= PHYSTOP && pa >= KERNBASE) {
+    if (add) 
+      refer_count[(pa - KERNBASE) / PGSIZE]++;
+    else 
+      refer_count[(pa - KERNBASE) / PGSIZE]--;
+  } else {
+    printf("change_ref_count: range error.");
+  }
+}
+
+uint64 get_ref_count(uint64 pa) {
+  if (pa <= PHYSTOP && pa >= KERNBASE) {
+    return refer_count[(pa - KERNBASE) / PGSIZE];
+  } else {
+    printf("get_ref_count: range error.");
+    return 0;
+  }
 }
