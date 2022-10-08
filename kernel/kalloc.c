@@ -14,7 +14,17 @@ void freerange(void *pa_start, void *pa_end);
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
   
-uint64 refer_count[(PHYSTOP - KERNBASE) / PGSIZE];
+uint64 refer_count[((uint64)PHYSTOP - (uint64)KERNBASE) / (uint64)PGSIZE];
+struct spinlock refer_count_lock;
+
+
+#define VALID_RANGE(pa) ((pa) <= (uint64)PHYSTOP && (pa) >= (uint64)KERNBASE)
+#define INDEX(pa) ((pa - (uint64)KERNBASE) / PGSIZE)
+
+void set_value(uint64 pa, uint64 set_one);
+uint64 get_ref_count(uint64 pa);
+void change_ref_count(uint64 pa, int add);
+
 
 struct run {
   struct run *next;
@@ -29,6 +39,7 @@ void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  initlock(&refer_count_lock, "refer_count_lock");
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -45,24 +56,37 @@ freerange(void *pa_start, void *pa_end)
 // which normally should have been returned by a
 // call to kalloc().  (The exception is when
 // initializing the allocator; see kinit above.)
-void
-kfree(void *pa)
-{
+
+void my_free(uint64 pa) {
+
   struct run *r;
-
-  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
-    panic("kfree");
-
   // Fill with junk to catch dangling refs.
-  memset(pa, 1, PGSIZE);
+  memset((void*)pa, 1, PGSIZE);
+  set_value((uint64)pa, 0);
 
-  refer_count[((uint64)pa - KERNBASE) / PGSIZE] = 0;
   r = (struct run*)pa;
 
   acquire(&kmem.lock);
   r->next = kmem.freelist;
   kmem.freelist = r;
   release(&kmem.lock);
+}
+
+void
+kfree(void *pa)
+{
+
+  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
+    panic("kfree");
+
+  if (get_ref_count((uint64)pa) == 0)
+    my_free((uint64)pa);
+  else {
+    change_ref_count((uint64)pa, 0);
+    if (get_ref_count((uint64)pa) == 0)
+      my_free((uint64)pa);
+  } 
+
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -81,7 +105,7 @@ kalloc(void)
 
   if(r) {
     memset((char*)r, 5, PGSIZE); // fill with junk
-    refer_count[((uint64)r - KERNBASE) / PGSIZE] = 1;
+    set_value((uint64)r, 1);
   }
   return (void*)r;
 }
@@ -89,21 +113,34 @@ kalloc(void)
 // add : 0 --
 // add : 1 ++
 void change_ref_count(uint64 pa, int add) {
-  if (pa <= PHYSTOP && pa >= KERNBASE) {
+  if (VALID_RANGE(pa) && refer_count[INDEX(pa)] > 0) {
+    acquire(&refer_count_lock);
     if (add) 
-      refer_count[(pa - KERNBASE) / PGSIZE]++;
+      refer_count[INDEX(pa)]++;
     else 
-      refer_count[(pa - KERNBASE) / PGSIZE]--;
-  } else {
-    printf("change_ref_count: range error.");
+      refer_count[INDEX(pa)]--;
+    release(&refer_count_lock);
   }
 }
 
 uint64 get_ref_count(uint64 pa) {
-  if (pa <= PHYSTOP && pa >= KERNBASE) {
-    return refer_count[(pa - KERNBASE) / PGSIZE];
+  if (VALID_RANGE(pa)) {
+    acquire(&refer_count_lock);
+    uint64 ref = refer_count[INDEX(pa)];
+    release(&refer_count_lock);
+    return ref;
   } else {
-    printf("get_ref_count: range error.");
-    return 0;
+    return -1;
+  }
+}
+
+void set_value(uint64 pa, uint64 set_one) {
+  if (VALID_RANGE(pa)) {
+    acquire(&refer_count_lock);
+    if (set_one)
+      refer_count[INDEX(pa)] = 1;
+    else 
+      refer_count[INDEX(pa)] = 0;
+    release(&refer_count_lock);
   }
 }

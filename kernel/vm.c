@@ -191,13 +191,8 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: not a leaf");
     pa = PTE2PA(*pte);
     if(do_free){
-      if (pa > PHYSTOP || pa < KERNBASE) {
         kfree((void*)pa);
-      } else if (get_ref_count(pa) == 1) {
-        kfree((void*)pa);
-      }
     }
-    change_ref_count(pa, 0);
     *pte = 0;
   }
 }
@@ -332,7 +327,6 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    change_ref_count(pa, 1);
 
     // if((mem = kalloc()) == 0)
     //   goto err;
@@ -341,6 +335,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       // kfree(mem);
       goto err;
     }
+    change_ref_count(pa, 1);
   }
   return 0;
 
@@ -370,13 +365,29 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
   pte_t* pte;
+  uint64 pa;
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     // cow
+    if (va0 >= MAXVA) return -1;
+    
     pte = walk(pagetable, va0, 0);
- 
+    
+    if (pte == 0 || ((*pte & (PTE_V | PTE_U)) == 0)) return -1;
+    
     if (!(*pte & PTE_W)) {
-      panic("copyout: handle the cow first");
+      pa = PTE2PA(*pte);
+      if (get_ref_count(pa) == 1)
+        *pte |= PTE_W;
+      else {
+        char *mem = 0;
+        if ((mem = kalloc()) == 0) {
+          return -1;
+        }
+        memmove(mem, (char*)pa, PGSIZE);
+        *pte = PA2PTE((uint64)mem) | PTE_FLAGS(*pte) | PTE_W;
+        change_ref_count(pa, 0);
+      }
     }
 
     pa0 = walkaddr(pagetable, va0);

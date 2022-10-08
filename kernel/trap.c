@@ -78,6 +78,7 @@ usertrap(void)
     // cow
     uint64 va = r_stval();
     uint64 old_pa = walkaddr(p->pagetable, va);
+    if (old_pa == 0) panic("old_pa is null");
     pte_t* pte = walk(p->pagetable, va, 0);
     uint64 ref_count = get_ref_count(old_pa);
     
