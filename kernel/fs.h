@@ -6,27 +6,28 @@
 #define BSIZE 1024  // block size
 
 // Disk layout:
-// [ boot block | super block | log | inode blocks |
-//                                          free bit map | data blocks]
+// [ boot block 1| super block 1| log 30| inode blocks 13|
+//                                          free bit map 25| data blocks 199930]
 //
 // mkfs computes the super block and builds an initial file system. The
 // super block describes the disk layout:
 struct superblock {
   uint magic;        // Must be FSMAGIC
   uint size;         // Size of file system image (blocks)
-  uint nblocks;      // Number of data blocks
-  uint ninodes;      // Number of inodes.
-  uint nlog;         // Number of log blocks
+  uint nblocks;      // Number of data blocks 200000
+  uint ninodes;      // Number of inodes. 13
+  uint nlog;         // Number of log blocks  30
   uint logstart;     // Block number of first log block
   uint inodestart;   // Block number of first inode block
-  uint bmapstart;    // Block number of first free map block
+  uint bmapstart;    // Block number of first free map block  
 };
 
 #define FSMAGIC 0x10203040
 
-#define NDIRECT 12
+#define NDIRECT 11
 #define NINDIRECT (BSIZE / sizeof(uint))
-#define MAXFILE (NDIRECT + NINDIRECT)
+#define DOUBLE_NINDIRECT ((NINDIRECT) * (NINDIRECT))
+#define MAXFILE (NDIRECT + NINDIRECT + DOUBLE_NINDIRECT)
 
 // On-disk inode structure
 struct dinode {
@@ -35,7 +36,7 @@ struct dinode {
   short minor;          // Minor device number (T_DEVICE only)
   short nlink;          // Number of links to inode in file system
   uint size;            // Size of file (bytes)
-  uint addrs[NDIRECT+1];   // Data block addresses
+  uint addrs[NDIRECT+2];   // Data block addresses
 };
 
 // Inodes per block.
