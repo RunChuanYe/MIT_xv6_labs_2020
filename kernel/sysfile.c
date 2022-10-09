@@ -534,7 +534,7 @@ uint64 sys_symlink(void) {
     end_op();
     return -1;
   }
-
+  // drop the reference!!
   iunlockput(ip);
   end_op();
   return 0; 
