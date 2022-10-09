@@ -193,8 +193,8 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     pa = PTE2PA(*pte);
-    if(do_free){
-        kfree((void*)pa);
+    if (do_free) {
+      kfree((void*)pa);
     }
     *pte = 0;
   }
@@ -319,6 +319,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   uint flags;
   // char *mem;
 
+  get_lock();
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
@@ -338,13 +339,13 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       // kfree(mem);
       goto err;
     }
-    get_lock();
     change_ref_count(pa, 1);
-    release_lock();
   }
+  release_lock();
   return 0;
 
  err:
+  release_lock();
   uvmunmap(new, 0, i / PGSIZE, 1);
   return -1;
 }
@@ -376,6 +377,10 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     // cow
     if (va0 >= MAXVA) return -1;
     
+    pa0 = walkaddr(pagetable, va0);
+    if(pa0 == 0)
+      return -1;
+
     pte = walk(pagetable, va0, 0);
     
     if (pte == 0 || ((*pte & (PTE_V | PTE_U)) == 0)) return -1;
@@ -394,15 +399,12 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
         }
         memmove(mem, (char*)pa, PGSIZE);
         *pte = (PA2PTE((uint64)mem) | PTE_FLAGS(*pte) | PTE_W) & ~PTE_COW;
-        
         change_ref_count(pa, 0);
       }
       release_lock();
     }
 
-    pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
-      return -1;
+    pa0 = PTE2PA(*pte);
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;

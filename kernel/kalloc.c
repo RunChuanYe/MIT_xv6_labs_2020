@@ -107,9 +107,9 @@ kalloc(void)
 
   if(r) {
     memset((char*)r, 5, PGSIZE); // fill with junk
-    get_lock();
+    // get_lock();
     set_value((uint64)r, 1);
-    release_lock();
+    // release_lock();
   }
   return (void*)r;
 }
@@ -117,7 +117,7 @@ kalloc(void)
 // add : 0 --
 // add : 1 ++
 void change_ref_count(uint64 pa, int add) {
-  if (VALID_RANGE(pa) && refer_count[INDEX(pa)] > 0) {
+  if (VALID_RANGE(pa)) {
     if (add) 
       refer_count[INDEX(pa)]++;
     else 

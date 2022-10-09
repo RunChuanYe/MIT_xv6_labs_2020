@@ -1,5 +1,5 @@
 // which hart (core) is this?
- inline uint64
+static inline uint64
 r_mhartid()
 {
   uint64 x;
