@@ -291,6 +291,8 @@ sys_open(void)
   struct file *f;
   struct inode *ip;
   int n;
+  int count = 0;
+  int max_recur = 10;
 
   if((n = argstr(0, path, MAXPATH)) < 0 || argint(1, &omode) < 0)
     return -1;
@@ -304,12 +306,35 @@ sys_open(void)
       return -1;
     }
   } else {
+    
     if((ip = namei(path)) == 0){
-      printf("in the namei");
       end_op();
       return -1;
     }
     ilock(ip);
+
+    if(ip->type == T_SYMLINK) {
+      while (ip->type == T_SYMLINK && (omode & O_NOFOLLOW) == 0) {
+        if (count++ > max_recur) {
+          iunlock(ip);
+          end_op();
+          return -1;
+        }
+        char path[MAXPATH];
+        if (readi(ip, 0, (uint64)path, 0, MAXPATH) < 0) {
+          iunlock(ip);
+          end_op();
+          return -1;
+        }
+        iunlock(ip);
+        if ((ip = namei(path)) == 0) {
+          end_op();
+          return -1;
+        }
+        ilock(ip);
+      }
+    }
+    
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
@@ -492,12 +517,9 @@ uint64 sys_symlink(void) {
   char target[MAXPATH];
   int path_len;
   int target_len;
-  
   struct inode *ip;
-  struct file *f;
-  int fd;
   
-  if ((target_len = argstr(0, target, MAXPATH) < 0) || (path_len = argstr(1, path, MAXPATH) < 0))
+  if ((target_len = argstr(0, target, MAXPATH)) < 0 || (path_len = argstr(1, path, MAXPATH)) < 0)
     return -1;
 
   begin_op();
@@ -508,30 +530,12 @@ uint64 sys_symlink(void) {
     return -1;
   }
 
-  if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
-    if(f)
-      fileclose(f);
-    iunlockput(ip);
+  if (target_len != writei(ip, 0, (uint64)target, 0, target_len)) {
     end_op();
     return -1;
   }
 
-  if(ip->type == T_DEVICE){
-    f->type = FD_DEVICE;
-    f->major = ip->major;
-  } else {
-    f->type = FD_INODE;
-    f->off = 0;
-  }
-  f->ip = ip;
-  f->writable = 1;
-
-  // filewrite(f, (uint64)target, target_len);
-  // myproc()->ofile[fd] = 0;
-  // fileclose(f);
-
   iunlockput(ip);
   end_op();
-
   return 0; 
 }
