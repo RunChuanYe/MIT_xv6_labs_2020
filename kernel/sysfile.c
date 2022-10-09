@@ -305,6 +305,7 @@ sys_open(void)
     }
   } else {
     if((ip = namei(path)) == 0){
+      printf("in the namei");
       end_op();
       return -1;
     }
@@ -483,4 +484,54 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+uint64 sys_symlink(void) {
+
+  char path[MAXPATH];
+  char target[MAXPATH];
+  int path_len;
+  int target_len;
+  
+  struct inode *ip;
+  struct file *f;
+  int fd;
+  
+  if ((target_len = argstr(0, target, MAXPATH) < 0) || (path_len = argstr(1, path, MAXPATH) < 0))
+    return -1;
+
+  begin_op();
+
+  ip = create(path, T_SYMLINK, 0, 0);
+  if (ip == 0) {
+    end_op();
+    return -1;
+  }
+
+  if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
+    if(f)
+      fileclose(f);
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+
+  if(ip->type == T_DEVICE){
+    f->type = FD_DEVICE;
+    f->major = ip->major;
+  } else {
+    f->type = FD_INODE;
+    f->off = 0;
+  }
+  f->ip = ip;
+  f->writable = 1;
+
+  // filewrite(f, (uint64)target, target_len);
+  // myproc()->ofile[fd] = 0;
+  // fileclose(f);
+
+  iunlockput(ip);
+  end_op();
+
+  return 0; 
 }
