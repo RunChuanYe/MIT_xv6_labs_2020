@@ -406,7 +406,7 @@ bmap(struct inode *ip, uint bn)
   if (bn < DOUBLE_NINDIRECT) {
     // Load indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT+1]) == 0)
-      ip->addrs[NDIRECT] = addr = balloc(ip->dev);
+      ip->addrs[NDIRECT+1] = addr = balloc(ip->dev);
     bp = bread(ip->dev, addr);    // get bp lock
     a = (uint*)bp->data;
     if((addr = a[bn / NINDIRECT]) == 0){
@@ -470,7 +470,7 @@ itrunc(struct inode *ip)
         }
         brelse(double_bp);
         bfree(ip->dev, a[i]);
-        a[i] = 0;
+        // a[i] = 0;
       }
     }
     brelse(bp);
