@@ -260,6 +260,25 @@ growproc(int n)
   return 0;
 }
 
+void copy_vma(vma *old, vma *new) {
+  new->f = old->f;
+  new->fd = old->fd;
+  new->flags = old->flags;
+  new->length = old->length;
+  new->prot = old->prot;
+  new->va = old->va;
+  new->valid = old->valid;
+  // do not forget to increase the refer count
+  if (new->f)
+    filedup(new->f);
+}
+
+void copy_vmas(struct proc* parent, struct proc* child) {
+  for (int i = 0; i < MAX_VMAS; ++i) {
+    copy_vma(&parent->vmas[i], &child->vmas[i]);
+  }
+}
+
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int
@@ -280,6 +299,9 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+  // copy all the vmas from parent to child
+  copy_vmas(p, np);
+
   np->sz = p->sz;
 
   np->parent = p;

@@ -29,7 +29,6 @@ typedef struct vma{
   int fd;
   struct file* f;
   int valid;
-  int has_map;
 } vma;
 
 

@@ -522,7 +522,6 @@ uint64 sys_mmap(void) {
 
   // init the vma
   p->vmas[free_vma].valid = 1;
-  p->vmas[free_vma].has_map = 0;
   // pg align
   p->vmas[free_vma].va = addr - (length / PGSIZE + 1) * PGSIZE;
   p->vmas[free_vma].length = length;
@@ -578,7 +577,6 @@ uint64 sys_munmap(void) {
       npages = PGROUNDUP(length) / PGSIZE;
     } else { // all
       p->vmas[vma_index].valid = 0;
-      p->vmas[vma_index].has_map = 0;
       length = PGROUNDUP(p->vmas[vma_index].length);
       npages = length / PGSIZE;
     }
