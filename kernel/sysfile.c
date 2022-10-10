@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "memlayout.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -482,5 +483,121 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64 sys_mmap(void) {
+  uint64 length;
+  int prot, flags, fd;
+  int free_vma;
+  struct file *f;
+  struct proc *p;
+  uint64 addr = VMA_MAX_ADDR;
+
+  if (argaddr(1, &length) < 0)
+    return -1;
+  if (argint(2, &prot) < 0 || argint(3, &flags) < 0 || argfd(4, &fd, &f) < 0)
+    return -1;
+
+  if (!f->readable && (prot & PROT_READ) != 0)
+    return -1;
+  if (!f->writable && (prot & PROT_WRITE) != 0  && (flags & MAP_PRIVATE) == 0)
+    return -1;
+
+
+  // get the free vma, and the lowest free va for mapping
+  p = myproc();
+  free_vma = -1;
+  for (int i = 0; i < MAX_VMAS; ++i) {
+    if (p->vmas[i].valid == 0) {
+      if (free_vma == -1)
+        free_vma = i;
+    } else {
+      addr = addr > p->vmas[i].va ? p->vmas[i].va : addr;
+    }
+  }
+
+  if (free_vma == -1)
+    panic("mmap: not free vma");
+
+  // init the vma
+  p->vmas[free_vma].valid = 1;
+  p->vmas[free_vma].has_map = 0;
+  // pg align
+  p->vmas[free_vma].va = addr - (length / PGSIZE + 1) * PGSIZE;
+  p->vmas[free_vma].length = length;
+  p->vmas[free_vma].prot = prot;
+  p->vmas[free_vma].flags = flags;
+  p->vmas[free_vma].fd = fd;
+  p->vmas[free_vma].f = f;
+  // increase the file's refer count
+  filedup(f);
+
+  return p->vmas[free_vma].va;
+}
+
+uint64 sys_munmap(void) {
+
+  uint64 length;
+  uint64 addr;
+  int vma_index = -1;
+  struct proc *p;
+  int npages;
+
+  if (argaddr(0, &addr) < 0 || argaddr(1, &length) < 0)
+    return -1;
+
+  p = myproc();
+  for (int i = 0; i < MAX_VMAS; ++i) {
+    if (p->vmas[i].valid) {
+      uint64 min_bound = p->vmas[i].va;
+      uint64 max_bound = p->vmas[i].length + min_bound;
+      if (addr >= min_bound && addr < max_bound) {
+        vma_index = i;
+        break;
+      }
+    }
+  }
+  if (vma_index == -1) {
+    panic("mummap: not valid va\n");
+    return -1;
+  }
+
+  // fault!
+  // if (p->vmas[vma_index].has_map == 0) {
+  //   printf("not map\n");
+  //   return 0;
+  // }
+  
+  // va and the addr must be page align
+  if (addr == p->vmas[vma_index].va) {
+    // part
+    if (PGROUNDUP(length) < p->vmas[vma_index].length) {
+      p->vmas[vma_index].va = addr + PGROUNDUP(length);
+      p->vmas[vma_index].length -= PGROUNDUP(length);
+      npages = PGROUNDUP(length) / PGSIZE;
+    } else { // all
+      p->vmas[vma_index].valid = 0;
+      p->vmas[vma_index].has_map = 0;
+      length = PGROUNDUP(p->vmas[vma_index].length);
+      npages = length / PGSIZE;
+    }
+  } else {
+    // part
+    p->vmas[vma_index].length -= PGROUNDUP(length);
+    npages = PGROUNDUP(length) / PGSIZE;
+  }
+  
+  if (p->vmas[vma_index].flags & MAP_SHARED) {
+      printf("write back\n");
+      filewrite(p->vmas[vma_index].f, addr, npages * PGSIZE);
+  }
+  if (p->vmas[vma_index].valid == 0)
+    fileclose(p->vmas[vma_index].f);
+
+  if (walkaddr(p->pagetable, PGROUNDDOWN(addr))) {
+    uvmunmap(p->pagetable, PGROUNDDOWN(addr), npages, 1);
+  }
+
   return 0;
 }

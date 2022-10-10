@@ -108,7 +108,6 @@ walkaddr(pagetable_t pagetable, uint64 va)
 
   if(va >= MAXVA)
     return 0;
-
   pte = walk(pagetable, va, 0);
   if(pte == 0)
     return 0;

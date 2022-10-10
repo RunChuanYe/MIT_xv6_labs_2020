@@ -5,6 +5,9 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fs.h"
+#include "sleeplock.h"
+#include "file.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -67,6 +70,62 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+
+  } else if (r_scause() == 13 || r_scause() == 15) {
+    uint64 va = r_stval();
+    int valid = 0;
+    int vma_index = -1;
+    // judge whether is a lazy allocation
+    for (int i = 0; i < MAX_VMAS; ++i) {
+      if (p->vmas[i].valid == 1) {
+        uint64 min_bound = p->vmas[i].va;
+        uint64 max_bound = min_bound + p->vmas[i].length;
+        if (va >= min_bound && va < max_bound) {
+          vma_index = i;
+          valid = 1;
+          break;
+        }
+      }
+    }
+
+    if (!valid || vma_index == -1) {
+      p->killed = 1;
+      exit(-1);
+    }
+    vma dst_vma = p->vmas[vma_index];
+    // alloca pa and the map
+    char *mem = 0;
+    if ((mem = kalloc()) == 0) {
+      p->killed = 1;
+      exit(-1);
+    }
+    memset(mem, 0, PGSIZE);
+    
+    int off = va - dst_vma.va;
+    int length = PGSIZE > (dst_vma.length + dst_vma.va - va) ? (dst_vma.length + dst_vma.va - va) : PGSIZE;
+
+    // read the file
+    ilock(dst_vma.f->ip);
+    if (readi(dst_vma.f->ip, 0, (uint64)mem, off, length) < 0) {
+      panic("readi error");
+    }
+    iunlock(dst_vma.f->ip);
+
+    int perm = 0;
+    perm |= PTE_U;
+    if (dst_vma.prot & PROT_READ)
+      perm |= PTE_R;
+    if (dst_vma.prot & PROT_WRITE)
+      perm |= PTE_W;
+    if (dst_vma.prot & PROT_EXEC)
+      perm |= PTE_X;
+
+    if (mappages(p->pagetable, va, PGSIZE, (uint64)mem, perm) < 0) {
+      kfree(mem);
+      panic("trap: map error\n");      
+    }
+    // in the kernel is not valid!!
+    // dst_vma.has_map = 1;
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
