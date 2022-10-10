@@ -345,7 +345,20 @@ exit(int status)
     panic("init exiting");
 
   // unmap all the mapped page!
-  
+  for (int i = 0; i < MAX_VMAS; ++i) {
+    if (p->vmas[i].valid) {
+      int npages = p->vmas[i].length / PGSIZE;
+      uint64 addr = p->vmas[i].va;
+      while (npages) {
+        if (walkaddr(p->pagetable, PGROUNDDOWN(addr))) {
+          uvmunmap(p->pagetable, PGROUNDDOWN(addr), 1, 1);
+        }
+        addr += PGSIZE;
+        npages--;
+      }
+      p->vmas[i].valid = 0;
+    }
+  }
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
