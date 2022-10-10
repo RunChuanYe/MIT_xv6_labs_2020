@@ -595,8 +595,13 @@ uint64 sys_munmap(void) {
   if (p->vmas[vma_index].valid == 0)
     fileclose(p->vmas[vma_index].f);
 
-  if (walkaddr(p->pagetable, PGROUNDDOWN(addr))) {
-    uvmunmap(p->pagetable, PGROUNDDOWN(addr), npages, 1);
+
+  while (npages) {
+    if (walkaddr(p->pagetable, PGROUNDDOWN(addr))) {
+      uvmunmap(p->pagetable, PGROUNDDOWN(addr), 1, 1);
+    }
+    addr += PGSIZE;
+    npages--;
   }
 
   return 0;
