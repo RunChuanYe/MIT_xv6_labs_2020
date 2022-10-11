@@ -125,10 +125,15 @@ usertrap(void)
     if (p->is_alarm && p->tick_left > 0) {
       p->tick_left--;
     } else if (!p->in_alarm && p->is_alarm && p->tick_left == 0) {
+      // fresh the tick left
       p->tick_left = p->tick_time;
+      // save the context
       moveContent(&p->alarmContext, p->trapframe);
+      // next, go to handler
       p->trapframe->epc = (uint64)p->handler;
+      // prevent re-entrant
       p->in_alarm = 1;
+      // return from user trap
       usertrapret();
     }
   }

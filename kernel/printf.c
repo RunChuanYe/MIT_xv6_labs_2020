@@ -135,9 +135,13 @@ printfinit(void)
 
 void backtrace() {
   uint64* x;
-  x = (uint64*) r_fp();
+  // get current fp   
+  x = (uint64*) r_fp(); 
+  // is the bottom of the stack frame?
   while (x != (uint64*)PGROUNDDOWN((uint64)x)) {
+    // print the return addr
     printf("%p\n", *(x-1));
+    // go to the caller fp
     x = (uint64*)*(x-2);
   }
 }

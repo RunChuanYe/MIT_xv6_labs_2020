@@ -111,7 +111,7 @@ found:
   p->tick_left = 0; 
   p->in_alarm = 0;
   p->is_alarm = 0;  // false
-  p->handler = 0;   // not null
+  p->handler = 0;
 
 
   p->pid = allocpid();
