@@ -107,6 +107,9 @@ kalloc(void)
 
   if(r) {
     memset((char*)r, 5, PGSIZE); // fill with junk
+    // kalloc does not cause inter-process contention
+    // They don't change the refer_count of the same pg at the same time
+    // in kalloc func, so the lock is unnecessary
     // get_lock();
     set_value((uint64)r, 1);
     // release_lock();
