@@ -74,7 +74,7 @@ void check_va_exit(uint64 va, uint64 sz) {
     if ((pa = walkaddr(myproc()->pagetable, v)) == 0) {
         // not mapped
         // valid range, p is the return value of sbrk
-        // p->sz is correctly seted
+        // p->sz is correctly set
         char *mem = 0;
         if ((mem = kalloc()) == 0) {
           myproc()->killed = 1;
