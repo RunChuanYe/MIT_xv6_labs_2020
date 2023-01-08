@@ -4,14 +4,16 @@
 #include <assert.h>
 #include <pthread.h>
 
+
+// total 
 static int nthread = 1;
-static int round = 0;
+// static int round = 0;
 
 struct barrier {
   pthread_mutex_t barrier_mutex;
   pthread_cond_t barrier_cond;
   int nthread;      // Number of threads that have reached this round of the barrier
-  int round;     // Barrier round
+  int round;        // Barrier round
 } bstate;
 
 static void

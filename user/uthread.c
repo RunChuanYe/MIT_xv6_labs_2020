@@ -11,8 +11,8 @@
 #define MAX_THREAD  4
 
 typedef struct thread_context{
-  uint64 ra;
-  uint64 sp;
+  uint64 ra;     // return addr
+  uint64 sp;     // stack pointer
 
   // callee-saved
   uint64 s0;

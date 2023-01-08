@@ -42,6 +42,7 @@ void put(int key, int value)
 {
   int i = key % NBUCKET;
 
+  // get lock
   pthread_mutex_lock(&mutex[i]);
   // is the key already present?
   struct entry *e = 0;
@@ -53,9 +54,10 @@ void put(int key, int value)
     // update the existing key.
     e->value = value;
   } else {
-    // the new is new.
+    // the key is new.
     insert(key, value, &table[i], table[i]);
   }
+  // release lock
   pthread_mutex_unlock(&mutex[i]);
 }
 
