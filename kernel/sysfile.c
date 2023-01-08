@@ -523,7 +523,10 @@ uint64 sys_mmap(void) {
   // init the vma
   p->vmas[free_vma].valid = 1;
   // pg align
-  p->vmas[free_vma].va = addr - (length / PGSIZE + 1) * PGSIZE;
+  if (length % PGSIZE == 0)
+    p->vmas[free_vma].va = addr - length;
+  else
+    p->vmas[free_vma].va = addr - (length / PGSIZE + 1) * PGSIZE;
   p->vmas[free_vma].length = length;
   p->vmas[free_vma].prot = prot;
   p->vmas[free_vma].flags = flags;
@@ -543,6 +546,7 @@ uint64 sys_munmap(void) {
   struct proc *p;
   int npages;
 
+  // attention: addr is not guaranteed to be pg align
   if (argaddr(0, &addr) < 0 || argaddr(1, &length) < 0)
     return -1;
 
@@ -568,22 +572,26 @@ uint64 sys_munmap(void) {
   //   return 0;
   // }
   
-  // va and the addr must be page align
+  // va must be page align, [va, ...) case
   if (addr == p->vmas[vma_index].va) {
-    // part
+    // remove part, from va to va + pgup(length)
     if (PGROUNDUP(length) < p->vmas[vma_index].length) {
       p->vmas[vma_index].va = addr + PGROUNDUP(length);
       p->vmas[vma_index].length -= PGROUNDUP(length);
       npages = PGROUNDUP(length) / PGSIZE;
-    } else { // all
+    } else { // remove all
       p->vmas[vma_index].valid = 0;
       length = PGROUNDUP(p->vmas[vma_index].length);
       npages = length / PGSIZE;
     }
-  } else {
-    // part
-    p->vmas[vma_index].length -= PGROUNDUP(length);
-    npages = PGROUNDUP(length) / PGSIZE;
+  } else {    // (, end] case
+    if ((addr + length) < (p->vmas[vma_index].length + p->vmas[vma_index].va))
+      panic("munmap: range error");
+    // remove part, remove from addr to end
+    uint64 length_remove = p->vmas[vma_index].length + p->vmas[vma_index].va 
+                                - PGROUNDDOWN(addr);
+    p->vmas[vma_index].length -= PGROUNDUP(length_remove);
+    npages = PGROUNDUP(length_remove) / PGSIZE;
   }
   
   if (p->vmas[vma_index].flags & MAP_SHARED) {
@@ -592,7 +600,6 @@ uint64 sys_munmap(void) {
   }
   if (p->vmas[vma_index].valid == 0)
     fileclose(p->vmas[vma_index].f);
-
 
   while (npages) {
     if (walkaddr(p->pagetable, PGROUNDDOWN(addr))) {

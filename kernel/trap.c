@@ -71,8 +71,8 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
 
-  } else if (r_scause() == 13 || r_scause() == 15) {
-    uint64 va = r_stval();
+  } else if (r_scause() == 13 || r_scause() == 15) { //page fault
+    uint64 va = r_stval();  // virtual addr
     int valid = 0;
     int vma_index = -1;
     // judge whether is a lazy allocation
@@ -88,6 +88,7 @@ usertrap(void)
       }
     }
 
+    // invalid va, break
     if (!valid || vma_index == -1) {
       p->killed = 1;
       exit(-1);
@@ -100,8 +101,12 @@ usertrap(void)
       exit(-1);
     }
     memset(mem, 0, PGSIZE);
+
+    // though the va is pg align, but using PGDOWN(va) is more safe and correct
+    va = PGROUNDDOWN(va);
     
     int off = va - dst_vma.va;
+    // get length, cause the file's is guaranteed to be pg align
     int length = PGSIZE > (dst_vma.length + dst_vma.va - va) ? (dst_vma.length + dst_vma.va - va) : PGSIZE;
 
     // read the file

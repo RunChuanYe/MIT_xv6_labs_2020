@@ -369,7 +369,11 @@ exit(int status)
   // unmap all the mapped page!
   for (int i = 0; i < MAX_VMAS; ++i) {
     if (p->vmas[i].valid) {
-      int npages = p->vmas[i].length / PGSIZE;
+      int npages = 0;
+      if (p->vmas[i].length % PGSIZE == 0)
+        npages = p->vmas[i].length / PGSIZE;
+      else 
+        npages = p->vmas[i].length / PGSIZE + 1;
       uint64 addr = p->vmas[i].va;
       while (npages) {
         if (walkaddr(p->pagetable, PGROUNDDOWN(addr))) {
