@@ -214,6 +214,7 @@ mmap_test(void)
   if(p1 == MAP_FAILED)
     err("mmap mmap1");
   close(fd1);
+  // decrease the hard link num, remove the inode and file
   unlink("mmap1");
 
   int fd2;
@@ -225,6 +226,7 @@ mmap_test(void)
   if(p2 == MAP_FAILED)
     err("mmap mmap2");
   close(fd2);
+  // decrease the hard link num, remove the inode and file
   unlink("mmap2");
 
   if(memcmp(p1, "12345", 5) != 0)

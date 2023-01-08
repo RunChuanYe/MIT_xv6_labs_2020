@@ -22,8 +22,8 @@ struct context {
 
 // virtual memeory area
 typedef struct vma{
-  uint64 va;
-  uint64 length;
+  uint64 va;        // va is always pg align
+  uint64 length;  
   int prot;
   int flags;
   int fd;
