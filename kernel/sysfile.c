@@ -529,7 +529,7 @@ uint64 sys_symlink(void) {
     end_op();
     return -1;
   }
-
+  // write target path to the data blk
   if (target_len != writei(ip, 0, (uint64)target, 0, target_len)) {
     end_op();
     return -1;

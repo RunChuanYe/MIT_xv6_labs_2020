@@ -377,6 +377,7 @@ iunlockput(struct inode *ip)
 static uint
 bmap(struct inode *ip, uint bn)
 {
+  // bn: nth blk of inode ip
   uint addr, *a;
   struct buf *bp;
 
@@ -391,7 +392,7 @@ bmap(struct inode *ip, uint bn)
     // Load indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT]) == 0)
       ip->addrs[NDIRECT] = addr = balloc(ip->dev);
-    bp = bread(ip->dev, addr);    // get bp lock
+    bp = bread(ip->dev, addr);    // get first level in_direct block
     a = (uint*)bp->data;
     if((addr = a[bn]) == 0){
       a[bn] = addr = balloc(ip->dev);
@@ -407,7 +408,7 @@ bmap(struct inode *ip, uint bn)
     // Load indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT+1]) == 0)
       ip->addrs[NDIRECT+1] = addr = balloc(ip->dev);
-    bp = bread(ip->dev, addr);    // get bp lock
+    bp = bread(ip->dev, addr);    // get first level in_direct block
     a = (uint*)bp->data;
     if((addr = a[bn / NINDIRECT]) == 0){
       a[bn / NINDIRECT] = addr = balloc(ip->dev);
@@ -415,7 +416,7 @@ bmap(struct inode *ip, uint bn)
     }
     brelse(bp);
 
-    bp = bread(ip->dev, addr);
+    bp = bread(ip->dev, addr);    // get second level in_direct block
     a = (uint*)bp->data;
     if ((addr = a[bn % NINDIRECT]) == 0) {
       a[bn % NINDIRECT] = addr = balloc(ip->dev);
@@ -440,6 +441,7 @@ itrunc(struct inode *ip)
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
       bfree(ip->dev, ip->addrs[i]);
+      // set null
       ip->addrs[i] = 0;
     }
   }
@@ -453,6 +455,7 @@ itrunc(struct inode *ip)
     }
     brelse(bp);
     bfree(ip->dev, ip->addrs[NDIRECT]);
+    // set null
     ip->addrs[NDIRECT] = 0;
   }
 
@@ -475,6 +478,7 @@ itrunc(struct inode *ip)
     }
     brelse(bp);
     bfree(ip->dev, ip->addrs[NDIRECT+1]);
+    // set null
     ip->addrs[NDIRECT+1] = 0;
   }
   ip->size = 0;
